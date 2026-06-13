@@ -50,13 +50,24 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     viewModel: YemenGuideViewModel,
-    onNavigateToChat: (Int, String) -> Unit,
+    onNavigateToChatRaw: (Int, String) -> Unit,
     onNavigateToRegister: () -> Unit,
     onNavigateToAssistant: () -> Unit,
     onNavigateToAdmin: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+
+    var showChatDisabledDialog by remember { mutableStateOf(false) }
+
+    // Decorate chat clicks to intercept disabled chats
+    val onNavigateToChat: (Int, String) -> Unit = { id, name ->
+        if (viewModel.isChatIconDeleted.value) {
+            showChatDisabledDialog = true
+        } else {
+            onNavigateToChatRaw(id, name)
+        }
+    }
 
     // Sub-modules state
     var currentMainTab by remember { mutableStateOf(0) } // 0 = دليل الفنيين, 1 = محادثاتي النشطة
@@ -73,6 +84,23 @@ fun HomeScreen(
     val selectedCity by viewModel.selectedCity.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val allProvidersList by viewModel.allProviders.collectAsStateWithLifecycle()
+
+    // Custom identities collected from configurations database
+    val chatIconSize by viewModel.chatIconSize.collectAsStateWithLifecycle()
+    val chatIconColorHex by viewModel.chatIconColorHex.collectAsStateWithLifecycle()
+    val isChatIconHidden by viewModel.isChatIconHidden.collectAsStateWithLifecycle()
+    val isChatIconDeleted by viewModel.isChatIconDeleted.collectAsStateWithLifecycle()
+
+    val assistantIconSize by viewModel.assistantIconSize.collectAsStateWithLifecycle()
+    val assistantIconColorHex by viewModel.assistantIconColorHex.collectAsStateWithLifecycle()
+    val isAssistantIconHidden by viewModel.isAssistantIconHidden.collectAsStateWithLifecycle()
+
+    val chatDisabledMessage by viewModel.chatDisabledMessage.collectAsStateWithLifecycle()
+    val isBookingsEnabled by viewModel.isBookingsEnabled.collectAsStateWithLifecycle()
+
+    val themePrimaryColorHex by viewModel.themePrimaryColorHex.collectAsStateWithLifecycle()
+    val themeSecondaryColorHex by viewModel.themeSecondaryColorHex.collectAsStateWithLifecycle()
+    val themeFontName by viewModel.themeFontName.collectAsStateWithLifecycle()
 
     // Admin controlled search states
     val searchEnabled by viewModel.searchEnabled.collectAsStateWithLifecycle()
@@ -180,6 +208,40 @@ fun HomeScreen(
             dismissButton = {
                 TextButton(onClick = { showSecretDialog = false }) {
                     Text("إلغاء", color = OffWhite)
+                }
+            }
+        )
+    }
+
+    if (showChatDisabledDialog) {
+        AlertDialog(
+            onDismissRequest = { showChatDisabledDialog = false },
+            title = {
+                Text(
+                    "تنبيه من الإدارة 🚨",
+                    fontWeight = FontWeight.Bold,
+                    color = try { Color(android.graphics.Color.parseColor(themePrimaryColorHex)) } catch(e: Exception) { YemenGold },
+                    textAlign = TextAlign.Right,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            text = {
+                Text(
+                    text = chatDisabledMessage,
+                    color = OffWhite,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Right,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showChatDisabledDialog = false },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = try { Color(android.graphics.Color.parseColor(themePrimaryColorHex)) } catch(e: Exception) { YemenGold }
+                    )
+                ) {
+                    Text("مفهوم", color = SlateBg)
                 }
             }
         )
@@ -411,7 +473,7 @@ fun HomeScreen(
                         Icon(
                             imageVector = Icons.Filled.Home,
                             contentDescription = "Logo Backdoor",
-                            tint = YemenGold,
+                            tint = try { Color(android.graphics.Color.parseColor(themePrimaryColorHex)) } catch(e: Exception) { YemenGold },
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -419,29 +481,65 @@ fun HomeScreen(
             }
         },
         floatingActionButton = {
+            val parsedChatIconColor = remember(chatIconColorHex) { try { Color(android.graphics.Color.parseColor(chatIconColorHex)) } catch(e: Exception) { YemenGold } }
+            val parsedAssistantColor = remember(assistantIconColorHex) { try { Color(android.graphics.Color.parseColor(assistantIconColorHex)) } catch(e: Exception) { SoftEmerald } }
+            val primaryAccent = remember(themePrimaryColorHex) { try { Color(android.graphics.Color.parseColor(themePrimaryColorHex)) } catch(e: Exception) { YemenGold } }
+
             Column(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Smart Assistant Floating Fab
-                FloatingActionButton(
-                    onClick = { onNavigateToAssistant() },
-                    containerColor = YemenGold,
-                    contentColor = SlateBg,
-                    shape = CircleShape,
-                    modifier = Modifier.size(56.dp).testTag("smart_assistant_fab")
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.AutoAwesome,
-                        contentDescription = "المساعد الذكي",
-                        modifier = Modifier.size(26.dp)
-                    )
+                // Floating Chat Widget / FAB with full specs controls (custom size, color, visibility, disable alerts)
+                val shouldShowChatIcon = !isChatIconHidden || (currentUser != UserSession.Guest)
+                if (shouldShowChatIcon) {
+                    FloatingActionButton(
+                        onClick = {
+                            if (isChatIconDeleted) {
+                                showChatDisabledDialog = true
+                            } else {
+                                // Toggle active chats tab
+                                currentMainTab = 1
+                            }
+                        },
+                        containerColor = parsedChatIconColor,
+                        contentColor = SlateBg,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .size(chatIconSize.dp)
+                            .testTag("floating_direct_chat_fab")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Chat,
+                            contentDescription = "مراسلة الدعم والدردشة النشطة",
+                            modifier = Modifier.size((chatIconSize * 0.46f).dp)
+                        )
+                    }
                 }
 
-                // Add Provider registration Fab
+                // Smart Assistant Floating Fab (custom size, colors, visibility)
+                val shouldShowAssistant = !isAssistantIconHidden || (currentUser != UserSession.Guest)
+                if (shouldShowAssistant) {
+                    FloatingActionButton(
+                        onClick = { onNavigateToAssistant() },
+                        containerColor = parsedAssistantColor,
+                        contentColor = SlateBg,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .size(assistantIconSize.dp)
+                            .testTag("smart_assistant_fab")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.AutoAwesome,
+                            contentDescription = "المساعد الذكي",
+                            modifier = Modifier.size((assistantIconSize * 0.46f).dp)
+                        )
+                    }
+                }
+
+                // Add Provider registration Fab (tinted matching primary color settings)
                 FloatingActionButton(
                     onClick = { onNavigateToRegister() },
-                    containerColor = SoftEmerald,
+                    containerColor = try { Color(android.graphics.Color.parseColor(themeSecondaryColorHex)) } catch(e: Exception) { SoftEmerald },
                     contentColor = Color.White,
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.size(56.dp).testTag("register_provider_fab")
@@ -457,7 +555,7 @@ fun HomeScreen(
                     FloatingActionButton(
                         onClick = { onNavigateToAdmin() },
                         containerColor = Purple40,
-                        contentColor = YemenGold,
+                        contentColor = primaryAccent,
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.size(56.dp).testTag("admin_dashboard_fab")
                     ) {

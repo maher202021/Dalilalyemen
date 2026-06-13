@@ -18,11 +18,21 @@ import com.example.ui.YemenGuideViewModel
 import com.example.ui.screens.*
 import com.example.ui.theme.MyApplicationTheme
 import com.example.utils.NotificationHelper
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreSettings
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     
+    // Initialize Firestore settings as mandated
+    val settings = FirebaseFirestoreSettings.Builder()
+        .setPersistenceEnabled(true)
+        .setCacheSizeBytes(FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
+        .build()
+    FirebaseFirestore.getInstance().firestoreSettings = settings
+    FirebaseFirestore.getInstance().configureOfflinePersistence(this)
+
     // Initialize notification channel for real system alerts
     NotificationHelper.createNotificationChannel(this)
 
@@ -58,7 +68,7 @@ class MainActivity : ComponentActivity() {
             composable("home") {
               HomeScreen(
                 viewModel = viewModel,
-                onNavigateToChat = { id, name ->
+                onNavigateToChatRaw = { id, name ->
                   navController.navigate("chat/$id/$name")
                 },
                 onNavigateToRegister = {

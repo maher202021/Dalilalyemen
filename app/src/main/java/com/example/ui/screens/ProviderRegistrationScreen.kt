@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -36,6 +37,7 @@ fun ProviderRegistrationScreen(
     
     val compressionStatus by viewModel.compressionStatus.collectAsStateWithLifecycle()
     val registrationSuccess by viewModel.registrationSuccess.collectAsStateWithLifecycle()
+    val registrationConditions by viewModel.registrationConditions.collectAsStateWithLifecycle()
 
     var fullName by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
@@ -43,6 +45,13 @@ fun ProviderRegistrationScreen(
     var selectedCity by remember { mutableStateOf("صنعاء") }
     var serviceDescription by remember { mutableStateOf("") }
     var mockAttachedImage by remember { mutableStateOf<String?>(null) }
+
+    // Upload & Capture Specs
+    var uploadSourceType by remember { mutableStateOf("gallery") } // gallery or camera
+    var isFemaleProvider by remember { mutableStateOf(false) } // females can upload profession-related replacement
+    
+    // Conditions checkable states map
+    var acceptMap = remember { mutableStateMapOf<String, Boolean>() }
 
     val categories = listOf("سباك", "كهربائي", "دهان", "نجار", "حداد", "تكييف", "نقل اثاث", "تنظيف")
     val cities = listOf("صنعاء", "عدن", "تعز", "الحديدة", "حضرموت", "إب", "مأرب")
@@ -256,19 +265,90 @@ fun ProviderRegistrationScreen(
                         )
                     )
 
-                    // Document/Photo Upload Emulator
-                    Text("أرفق صورتك الشخصية أو رخصة المهنة", color = OffWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    HorizontalDivider(color = SlateBg, modifier = Modifier.padding(vertical = 12.dp))
+
+                    // Female Provider Selector
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .clickable { isFemaleProvider = !isFemaleProvider },
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "تحميل صورة ترمز للمهنة مجهولة الوجه بدلاً من السيلفي\n(خيار مخصص للفنيات لمراعاة الخصوصية والسلامة 🛡️)",
+                            color = YemenGold,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Right,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Checkbox(
+                            checked = isFemaleProvider,
+                            onCheckedChange = { isFemaleProvider = it },
+                            colors = CheckboxDefaults.colors(checkedColor = YemenGold)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Doc Source Selector
+                    Text("اختر مصدر إدخال وتحميل الصورة 📸", color = OffWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { 
+                                uploadSourceType = "camera" 
+                                mockAttachedImage = if (isFemaleProvider) "professional_workspace_photo.png" else "yemeni_selfie_captured.png"
+                                Toast.makeText(context, "📷 تم تفعيل كاميرا الهاتف والتقاط الصورة مباشرة بنجاح!", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (uploadSourceType == "camera") YemenGold else SlateBg
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = if (uploadSourceType == "camera") SlateBg else YemenGold)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("سيلفي كاميرا", color = if (uploadSourceType == "camera") SlateBg else OffWhite, fontSize = 11.sp)
+                            }
+                        }
+
+                        Button(
+                            onClick = { 
+                                uploadSourceType = "gallery" 
+                                mockAttachedImage = if (isFemaleProvider) "workspace_design_portfolio.png" else "my_gallery_selfie.png"
+                                Toast.makeText(context, "📂 تم فتح المعرض الداخلي للهاتف وتحديد الصورة بنجاح!", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (uploadSourceType == "gallery") YemenGold else SlateBg
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1.2f)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Image, contentDescription = null, tint = if (uploadSourceType == "gallery") SlateBg else YemenGold)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("ذاكرة الهاتف (الاستوديو)", color = if (uploadSourceType == "gallery") SlateBg else OffWhite, fontSize = 11.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Document/Photo Upload Emulator Box
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 6.dp, bottom = 16.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(SlateBg)
                             .border(1.dp, YemenGold.copy(alpha = 0.2f))
-                            .clickable {
-                                mockAttachedImage = "artistic_engineer_avatar.png"
-                                Toast.makeText(context, "📷 تم تحديد الصورة (5.4 ميجابايت).", Toast.LENGTH_SHORT).show()
-                            }
                             .padding(16.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -281,7 +361,7 @@ fun ProviderRegistrationScreen(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = if (mockAttachedImage != null) "تم إرفاق الملف: $mockAttachedImage" else "انقر لتحميل مستندات الإثبات كالهوية الشخصية",
+                                text = if (mockAttachedImage != null) "الملف الجاهز للرفع والضغط: $mockAttachedImage" else "الرجاء تحديد صورتك أو مستند رخصتك",
                                 color = if (mockAttachedImage != null) SoftEmerald else OffWhite,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -292,6 +372,55 @@ fun ProviderRegistrationScreen(
             }
 
             Spacer(modifier = Modifier.height(20.dp))
+
+            // Section C: Terms and Conditions List loaded dynamically from Firestore Admin settings
+            if (registrationConditions.isNotEmpty()) {
+                Text(
+                    "شروط وقواعد التسجيل المطلوبة من الإدارة ⚠️",
+                    color = YemenGold,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = SlateCard)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        registrationConditions.forEach { cond ->
+                            val isChecked = acceptMap[cond.id] ?: false
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .minimumInteractiveComponentSize()
+                                    .clickable { acceptMap[cond.id] = !isChecked },
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${cond.text} ${if (cond.isRequired) "(إلزامي ⚠️)" else "(اختياري)"}",
+                                    color = OffWhite,
+                                    fontSize = 11.sp,
+                                    textAlign = TextAlign.Right,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Checkbox(
+                                    checked = isChecked,
+                                    onCheckedChange = { acceptMap[cond.id] = it },
+                                    colors = CheckboxDefaults.colors(checkedColor = YemenGold)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             // Compression progress logs indicator (Live display of photo reduction!)
             AnimatedVisibility(
@@ -339,10 +468,17 @@ fun ProviderRegistrationScreen(
             // Register Submit Button
             Button(
                 onClick = {
+                    // Check required conditions are met
+                    val missingRequired = registrationConditions.filter { it.isRequired }.any { cond ->
+                        (acceptMap[cond.id] ?: false) == false
+                    }
+
                     if (fullName.isEmpty() || phone.isEmpty() || serviceDescription.isEmpty()) {
                         Toast.makeText(context, "يرجى ملء جميع الحقول الإلزامية لتسجيل الطلب!", Toast.LENGTH_LONG).show()
                     } else if (phone.length < 9) {
                         Toast.makeText(context, "يرجى إدخال رقم هاتف يمني صحيح ومكتمل!", Toast.LENGTH_LONG).show()
+                    } else if (missingRequired) {
+                        Toast.makeText(context, "الرجاء الموافقة على جميع شروط تسجيل الإدارة الإلزامية للمتابعة!", Toast.LENGTH_LONG).show()
                     } else {
                         viewModel.registerNewProvider(
                             fullName, phone, selectedCategory, selectedCity, serviceDescription, mockAttachedImage
@@ -350,7 +486,7 @@ fun ProviderRegistrationScreen(
                     }
                 },
                 modifier = Modifier
-                    .fillBoxWidth()
+                    .fillMaxWidth()
                     .height(52.dp)
                     .testTag("submit_registration_button"),
                 colors = ButtonDefaults.buttonColors(
@@ -386,9 +522,6 @@ fun ProviderRegistrationScreen(
         }
     }
 }
-
-@Composable
-fun Modifier.fillBoxWidth() = this.fillMaxWidth()
 
 @Composable
 private fun iconImageVectorForStatus(status: String?): androidx.compose.ui.graphics.vector.ImageVector {

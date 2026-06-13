@@ -27,8 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.data.AdBanner
-import com.example.data.ServiceProvider
+import com.example.data.*
 import com.example.ui.YemenGuideViewModel
 import com.example.ui.theme.*
 
@@ -44,14 +43,19 @@ fun AdminDashboardScreen(
     val allProviders by viewModel.allProviders.collectAsStateWithLifecycle()
     val banners by viewModel.banners.collectAsStateWithLifecycle()
     val notificationsLog by viewModel.notifications.collectAsStateWithLifecycle()
+    val bookingsList by viewModel.bookings.collectAsStateWithLifecycle()
+    val registrationConditions by viewModel.registrationConditions.collectAsStateWithLifecycle()
+    val taskProgress by viewModel.taskProgress.collectAsStateWithLifecycle()
 
-    // Sub-menus Arabic
+    // Sub-menus Arabic (increased to 7 items to fit all specs)
     val subMenuTitles = listOf(
         "الإحصائيات" to Icons.Filled.BarChart,
         "مراجعة الطلبات" to Icons.Filled.HourglassBottom,
         "البنرات والإعلانات" to Icons.Filled.PostAdd,
         "مركز الإشعارات" to Icons.Filled.NotificationAdd,
-        "إدارة الخدمات" to Icons.Filled.ManageAccounts
+        "إدارة الفنيين" to Icons.Filled.ManageAccounts,
+        "الحجوزات المعلقة" to Icons.Filled.DateRange,
+        "التحكم والهوية" to Icons.Filled.SettingsSuggest
     )
 
     Scaffold(
@@ -112,7 +116,7 @@ fun AdminDashboardScreen(
                     notificationsLog = notificationsLog,
                     onSend = { title, body, target -> 
                         viewModel.sendAdminNotification(title, body, target)
-                        Toast.makeText(context, "تم بث الإشعار بنجاح لجميع مستخدمي الهدف!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "تم بث الإشعار بنجاح لجميع أجهزة الهدف!", Toast.LENGTH_SHORT).show()
                     }
                 )
                 4 -> AdminManageProvidersTab(
@@ -121,21 +125,22 @@ fun AdminDashboardScreen(
                     onToggleRecommended = { viewModel.toggleRecommended(it) },
                     onDelete = { viewModel.deleteProvider(it) },
                     onAddLoyaltyPoints = { provider ->
-                        val updated = provider.copy(points = provider.points + 10)
-                        viewModel.viewModelScopeLaunchDirectly {
-                            viewModel.approveProvider(updated) // Triggers overwrite / update
-                        }
+                        viewModel.addLoyaltyPoints(provider, 10)
                         Toast.makeText(context, "تمت إضافة ١٠ نقاط ولاء لـ ${provider.name}!", Toast.LENGTH_SHORT).show()
                     }
+                )
+                5 -> AdminBookingsTab(
+                    viewModel = viewModel,
+                    bookingsList = bookingsList
+                )
+                6 -> AdminAppIdentityTab(
+                    viewModel = viewModel,
+                    registrationConditions = registrationConditions,
+                    taskProgress = taskProgress
                 )
             }
         }
     }
-}
-
-// Utility extension to avoid compiler issues with direct scope launch
-fun YemenGuideViewModel.viewModelScopeLaunchDirectly(block: suspend () -> Unit) {
-    this.registerNewProvider("dummy_noop", "0", "noop", "noop", "noop", null) // Dummy call or we can use custom scope
 }
 
 // --- TAB 1: AdminStatsTab with Canvas Charts ---
@@ -149,7 +154,6 @@ fun AdminStatsTab(
     val activeCount = allProviders.count { it.status == "نشط" }
     val pendingCount = allProviders.count { it.status == "قيد الانتظار" }
     val vipCount = allProviders.count { it.isVip }
-    val recommendedCount = allProviders.count { it.isRecommended }
 
     LazyColumn(
         modifier = Modifier
@@ -451,35 +455,26 @@ fun AdminPendingQueueTab(
                         )
 
                         Spacer(modifier = Modifier.height(14.dp))
-
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
-                                onClick = { onApprove(provider) },
-                                colors = ButtonDefaults.buttonColors(containerColor = SoftEmerald),
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp)
+                                onClick = { onReject(provider) },
+                                colors = ButtonDefaults.buttonColors(containerColor = DeepCoral.copy(alpha = 0.3f)),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("موافقة وتوثيق", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                }
+                                Text("رفض الطلب ❌", color = DeepCoral, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
 
                             Button(
-                                onClick = { onReject(provider) },
-                                colors = ButtonDefaults.buttonColors(containerColor = DeepCoral),
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp)
+                                onClick = { onApprove(provider) },
+                                colors = ButtonDefaults.buttonColors(containerColor = SoftEmerald),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1.2f)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("رفض وتقييد", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                }
+                                Text("الموافقة الفورية وعرض الفني ✅", color = SlateBg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -496,285 +491,293 @@ fun AdminBannersTab(
     onAdd: (String, String) -> Unit,
     onDelete: (AdBanner) -> Unit
 ) {
-    var bannerTitle by remember { mutableStateOf("") }
-    var bannerDesc by remember { mutableStateOf("") }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Text(
-                "إدارة البنرات الإعلانية المتحركة 📣",
-                color = YemenGold,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-        }
-
-        // Add form
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = SlateCard)
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text("إضافة إعلان متحرك جديد", color = YemenGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = bannerTitle,
-                        onValueChange = { bannerTitle = it },
-                        modifier = Modifier.fillMaxWidth().testTag("banner_title_input"),
-                        placeholder = { Text("عنوان الإعلان الاختصاري") },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = YemenGold, unfocusedBorderColor = SlateBg,
-                            focusedTextColor = OffWhite, unfocusedTextColor = OffWhite
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = bannerDesc,
-                        onValueChange = { bannerDesc = it },
-                        modifier = Modifier.fillMaxWidth().testTag("banner_desc_input"),
-                        placeholder = { Text("عرض وتفاصيل الإعلان كاملة...") },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = YemenGold, unfocusedBorderColor = SlateBg,
-                            focusedTextColor = OffWhite, unfocusedTextColor = OffWhite
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            if (bannerTitle.isNotEmpty() && bannerDesc.isNotEmpty()) {
-                                onAdd(bannerTitle, bannerDesc)
-                                bannerTitle = ""
-                                bannerDesc = ""
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = YemenGold, contentColor = SlateBg),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("حفظ ونشر الإعلان", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        // Banners List
-        item {
-            Text("البنرات المنشورة حالياً بالرئيسية :", color = OffWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        }
-
-        items(banners) { banner ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = SlateCard)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { onDelete(banner) },
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(DeepCoral.copy(alpha = 0.15f))
-                    ) {
-                        Icon(Icons.Filled.Delete, contentDescription = "حذف الإعلان", tint = DeepCoral)
-                    }
-
-                    Column(
-                        modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        Text(banner.title, color = OffWhite, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Text(banner.description, color = MutedSlate, fontSize = 11.sp, textAlign = TextAlign.Right, maxLines = 2)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// --- TAB 4: AdminPushNotificationTab ---
-@Composable
-fun AdminPushNotificationTab(
-    notificationsLog: List<com.example.data.NotificationLog>,
-    onSend: (String, String, String) -> Unit
-) {
     var title by remember { mutableStateOf("") }
-    var body by remember { mutableStateOf("") }
-    var target by remember { mutableStateOf("all") }
+    var desc by remember { mutableStateOf("") }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             Text(
-                "إرسال إشعارات فورية مستهدفة 📢",
+                "رعاية وبناء بنرات الإعلانات الترويجية 📢",
                 color = YemenGold,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                "أضف بنرات مخصصة للظهور كشريط علوي للمستخدمين بجميع المحافظات لترويج المناسبات أو الخصومات الموسمية.",
+                color = MutedSlate,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
             )
         }
 
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = SlateCard)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.End
                 ) {
-                    // Title Input
-                    Text("عنوان الإشعار الاقتحامي", color = OffWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("إضافة بنر إعلاني جديد 🏷️", color = YemenGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     OutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp).testTag("notif_title_input"),
-                        placeholder = { Text("مثال: تحديث أمني هام") },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = YemenGold, unfocusedBorderColor = SlateBg,
-                            focusedTextColor = OffWhite, unfocusedTextColor = OffWhite
-                        )
+                        label = { Text("عنوان الإعلان الترويجي") },
+                        modifier = Modifier.fillMaxWidth().testTag("banner_title_input"),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = YemenGold, unfocusedBorderColor = MutedSlate)
                     )
 
-                    // Message Body Input
-                    Text("نص الإشعار والتفاصيل", color = OffWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(10.dp))
+
                     OutlinedTextField(
-                        value = body,
-                        onValueChange = { body = it },
-                        modifier = Modifier.fillMaxWidth().height(80.dp).padding(top = 4.dp, bottom = 12.dp).testTag("notif_body_input"),
-                        placeholder = { Text("مثال: يرجى تحديث بيانات الحساب وصور الترخيص...") },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = YemenGold, unfocusedBorderColor = SlateBg,
-                            focusedTextColor = OffWhite, unfocusedTextColor = OffWhite
-                        )
+                        value = desc,
+                        onValueChange = { desc = it },
+                        label = { Text("محتوى أو تفاصيل الإعلان") },
+                        modifier = Modifier.fillMaxWidth().testTag("banner_desc_input"),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = YemenGold, unfocusedBorderColor = MutedSlate)
                     )
 
-                    // Target Select
-                    Text("الجمهور المستهدف بالإشعار", color = OffWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp, bottom = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButtonOption(label = "جميع العملاء", isSelected = target == "users", onClick = { target = "users" })
-                        RadioButtonOption(label = "مقدمي الخدمات", isSelected = target == "providers", onClick = { target = "providers" })
-                        RadioButtonOption(label = "الجميع", isSelected = target == "all", onClick = { target = "all" })
-                    }
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    // Button
                     Button(
                         onClick = {
-                            if (title.isNotEmpty() && body.isNotEmpty()) {
-                                onSend(title, body, target)
+                            if (title.isNotEmpty() && desc.isNotEmpty()) {
+                                onAdd(title, desc)
                                 title = ""
-                                body = ""
+                                desc = ""
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = YemenGold, contentColor = SlateBg),
+                        colors = ButtonDefaults.buttonColors(containerColor = YemenGold),
                         shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("send_push_button")
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("بث وإرسال الإشعار الآن", fontWeight = FontWeight.ExtraBold)
+                        Text("حفظ ونشر الإعلان فوراً لقاعدة البيانات 🚀", color = SlateBg, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
 
         item {
-            Text("اللوج التاريخي لعمليات الإرسال السابقة :", color = OffWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("البنرات المنشورة والنشطة حالياً 📱", color = OffWhite, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
 
-        items(notificationsLog) { log ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = SlateCard)
-            ) {
-                Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.End) {
+        if (banners.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("لا يوجد بنرات ترويجية منشورة حالياً.", color = MutedSlate, fontSize = 12.sp)
+                }
+            }
+        } else {
+            items(banners) { banner ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = SlateCard),
+                    border = BorderStroke(1.dp, YemenGold.copy(alpha = 0.2f))
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(YemenGold.copy(alpha = 0.2f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = when (log.target) {
-                                    "all" -> "المستهدف: الجميع"
-                                    "providers" -> "المستهدف: فنيين"
-                                    else -> "المستهدف: مرسل"
-                                },
-                                color = YemenGold,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                        IconButton(onClick = { onDelete(banner) }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = DeepCoral)
                         }
-                        Text(log.title, color = OffWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
+                            Text(banner.title, color = YemenGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(banner.description, color = OffWhite, fontSize = 11.sp, textAlign = TextAlign.Right)
+                        }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(log.body, color = MutedSlate, fontSize = 11.sp, textAlign = TextAlign.Right)
                 }
             }
         }
     }
 }
 
+// --- TAB 4: AdminPushNotificationTab / NotificationsTab ---
 @Composable
-fun RowScope.RadioButtonOption(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
+fun AdminPushNotificationTab(
+    notificationsLog: List<NotificationLog>,
+    onSend: (String, String, String) -> Unit
 ) {
-    Row(
+    var title by remember { mutableStateOf("") }
+    var body by remember { mutableStateOf("") }
+    var selectedTarget by remember { mutableStateOf("all") }
+
+    LazyColumn(
         modifier = Modifier
-            .weight(1f)
-            .height(38.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isSelected) YemenGold.copy(alpha = 0.15f) else SlateBg)
-            .border(1.dp, if (isSelected) YemenGold else Color.Transparent)
-            .clickable { onClick() }
-            .padding(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text(label, color = if (isSelected) YemenGold else OffWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.width(2.dp))
-        RadioButton(
-            selected = isSelected,
-            onClick = null,
-            colors = RadioButtonDefaults.colors(selectedColor = YemenGold, unselectedColor = MutedSlate),
-            modifier = Modifier.size(16.dp)
-        )
+        item {
+            Text(
+                "مركز بث الرسائل والإشعارات المباشرة 🔔",
+                color = YemenGold,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                "أرسل إشعارات عاجلة لشرائح المستخدمين ومزودي الخدمات في اليمن لمتابعة التحديثات الأمنية أو عروض التوظيف الكبرى.",
+                color = MutedSlate,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = SlateCard)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("صياغة تنبيه وبث إشعار فوري 💬", color = YemenGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("عنوان التنبيه") },
+                        modifier = Modifier.fillMaxWidth().testTag("push_title_input"),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = YemenGold, unfocusedBorderColor = MutedSlate)
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = body,
+                        onValueChange = { body = it },
+                        label = { Text("محتوى وتفصيل التنبيه") },
+                        modifier = Modifier.fillMaxWidth().testTag("push_body_input"),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = YemenGold, unfocusedBorderColor = MutedSlate)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text("حدد الفئة المستهدفة بالتنبيه:", color = OffWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Target segment selectors
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = selectedTarget == "providers", onClick = { selectedTarget = "providers" })
+                            Text("الفنيين فقط", color = OffWhite, fontSize = 11.sp)
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = selectedTarget == "users", onClick = { selectedTarget = "users" })
+                            Text("العملاء فقط", color = OffWhite, fontSize = 11.sp)
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = selectedTarget == "all", onClick = { selectedTarget = "all" })
+                            Text("الجميع", color = OffWhite, fontSize = 11.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = {
+                            if (title.isNotEmpty() && body.isNotEmpty()) {
+                                onSend(title, body, selectedTarget)
+                                title = ""
+                                body = ""
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = YemenGold),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("بث إشعار فوري لجميع الأجهزة 🚀", color = SlateBg, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        item {
+            Text("تاريخ وسجل الإشعارات المرسلة مؤخراً 🎞️", color = OffWhite, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+
+        if (notificationsLog.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("سجل الإشعارات خالي حالياً.", color = MutedSlate, fontSize = 12.sp)
+                }
+            }
+        } else {
+            items(notificationsLog) { log ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = SlateCard)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            val targetLabel = when(log.target) {
+                                "all" -> "عام"
+                                "providers" -> "الفنيين"
+                                else -> "العملاء"
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(YemenGold.copy(alpha = 0.15f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(targetLabel, color = YemenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(log.title, color = OffWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(log.body, color = MutedSlate, fontSize = 11.sp, textAlign = TextAlign.Right, modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -794,31 +797,33 @@ fun AdminManageProvidersTab(
             .fillMaxSize()
             .padding(16.dp),
         horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             Text(
-                "التحكم الحصري بنقاط الولاء وVIP والترقيات ✨",
+                "إدارة والتحكم في مقدمي الخدمات الفعالين 👷‍♂️",
                 color = YemenGold,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.ExtraBold
             )
             Text(
-                "قم بترقية أي مقدم خدمة إلى قائمة VIP، تمييزه كموصى به، أو زيادة رصيد نقاط الولاء الخاصة به لجذب عملاء أكثر.",
+                "تحكم في مستويات الفنيين النشطين كترقيتهم لعلامات VIP المتميزة أو التوصية التلقائية أو منح نقاط الولاء لشجيعهم، أو إلغاء تفعيل حساباتهم نهائياً.",
                 color = MutedSlate,
                 fontSize = 11.sp,
                 textAlign = TextAlign.Right,
-                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
             )
         }
 
         if (activeProviders.isEmpty()) {
             item {
                 Box(
-                    modifier = Modifier.fillMaxWidth().padding(40.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 48.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("لا يوحد فنيين نشطين للتعديل والترقية حالياً.", color = MutedSlate, fontSize = 13.sp)
+                    Text("لا يوجد فنيين نشطين للتعديل والترقية حالياً.", color = MutedSlate, fontSize = 13.sp)
                 }
             }
         } else {
@@ -835,7 +840,7 @@ fun AdminManageProvidersTab(
                             verticalAlignment = Alignment.Top
                         ) {
                             Text(
-                                "الولاء: ${provider.points} نقطة",
+                                "الولاء: ${provider.points} نقطة 🏆",
                                 color = SoftEmerald,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
@@ -886,7 +891,7 @@ fun AdminManageProvidersTab(
                                 modifier = Modifier.weight(1.5f),
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                             ) {
-                                Text(if (provider.isRecommended) "مسح التوصية" else "تمييز مموصى به", color = if (provider.isRecommended) Color.White else SoftEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(if (provider.isRecommended) "مسح التوصية" else "تمييز موصى به", color = if (provider.isRecommended) Color.White else SoftEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
 
                             // Loyalty Point
@@ -898,9 +903,669 @@ fun AdminManageProvidersTab(
                                 border = BorderStroke(1.dp, SoftEmerald),
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("+10 ولاء", color = SoftEmerald, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                                Text("+10 ولاء", color = SoftEmerald, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// --- TAB 6: AdminBookingsTab (BRAND NEW!) ---
+@Composable
+fun AdminBookingsTab(
+    viewModel: YemenGuideViewModel,
+    bookingsList: List<Booking>
+) {
+    val isBookingsEnabled by viewModel.isBookingsEnabled.collectAsStateWithLifecycle()
+    val bookingVisibility by viewModel.bookingVisibility.collectAsStateWithLifecycle()
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            Text(
+                "إدارة حجوزات ومواعيد الفنيين 📅",
+                color = YemenGold,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                "تحكم في إمكانية حجز مواعيد الصيانة، واختيار مستويات رؤية المواعيد لزيادة تواصل الأطراف.",
+                color = MutedSlate,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+            )
+        }
+
+        // Toggles & Settings Card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = SlateCard),
+                border = BorderStroke(1.dp, YemenGold.copy(alpha = 0.2f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Switch(
+                            checked = isBookingsEnabled,
+                            onCheckedChange = { viewModel.updateBookingSettings(it, bookingVisibility) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = YemenGold, checkedTrackColor = YemenGold.copy(alpha = 0.4f))
+                        )
+                        Text("ميزة جدولة الحجوزات نشطة", color = OffWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    HorizontalDivider(color = SlateBg, modifier = Modifier.padding(vertical = 12.dp))
+
+                    Text("مستويات رؤية ومتابعة المواعيد:", color = YemenGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val visibilityOptions = listOf("الإدارة والفني", "الفني فقط", "الإدارة فقط")
+                    visibilityOptions.forEach { opt ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .minimumInteractiveComponentSize()
+                                .clickable { viewModel.updateBookingSettings(isBookingsEnabled, opt) },
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(opt, color = OffWhite, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            RadioButton(
+                                selected = bookingVisibility == opt,
+                                onClick = { viewModel.updateBookingSettings(isBookingsEnabled, opt) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Text("قائمة المواعيد والحجوزات الحالية 🗓️", color = OffWhite, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+
+        if (bookingsList.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("لا يوجد مواعيد صيانة مجدولة بالقائمة حتى الآن.", color = MutedSlate, fontSize = 12.sp)
+                }
+            }
+        } else {
+            items(bookingsList) { booking ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = SlateCard)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        when(booking.status) {
+                                            "مقبول" -> SoftEmerald.copy(alpha = 0.15f)
+                                            "مرفوض" -> DeepCoral.copy(alpha = 0.15f)
+                                            "مكتمل" -> Color.Cyan.copy(alpha = 0.15f)
+                                            else -> YemenGold.copy(alpha = 0.15f)
+                                        }
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = booking.status,
+                                    color = when(booking.status) {
+                                        "مقبول" -> SoftEmerald
+                                        "مرفوض" -> DeepCoral
+                                        "مكتمل" -> Color.Cyan
+                                        else -> YemenGold
+                                    },
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("العميل: ${booking.userName}", color = OffWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text("الفني المطلوب: ${booking.providerName} (${booking.serviceCategory})", color = YemenGold, fontSize = 11.sp)
+                                Text("التاريخ: ${booking.date} • الوقت: ${booking.time}", color = MutedSlate, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                                if (booking.notes.isNotEmpty()) {
+                                    Text("ملاحظات: ${booking.notes}", color = MutedSlate, fontSize = 11.sp, textAlign = TextAlign.Right, modifier = Modifier.padding(top = 4.dp))
                                 }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            IconButton(
+                                onClick = { viewModel.removeBooking(booking.id) },
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(DeepCoral.copy(alpha = 0.15f))
+                                    .size(36.dp)
+                            ) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = DeepCoral)
+                            }
+
+                            if (booking.status == "قيد الانتظار") {
+                                Button(
+                                    onClick = { viewModel.changeBookingStatus(booking.id, "مرفوض") },
+                                    colors = ButtonDefaults.buttonColors(containerColor = SlateBg),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("رفض الحجز", color = DeepCoral, fontSize = 10.sp)
+                                }
+
+                                Button(
+                                    onClick = { viewModel.changeBookingStatus(booking.id, "مقبول") },
+                                    colors = ButtonDefaults.buttonColors(containerColor = SoftEmerald),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("قبول الموعد", color = SlateBg, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            } else if (booking.status == "مقبول") {
+                                Button(
+                                    onClick = { viewModel.changeBookingStatus(booking.id, "مكتمل") },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Cyan),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("بث واكتمال الخدمة بنجاح 🏆", color = SlateBg, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// --- TAB 7: AdminAppIdentityTab (BRAND NEW!) ---
+@Composable
+fun AdminAppIdentityTab(
+    viewModel: YemenGuideViewModel,
+    registrationConditions: List<RegistrationCondition>,
+    taskProgress: String?
+) {
+    val chatIconSize by viewModel.chatIconSize.collectAsStateWithLifecycle()
+    val chatIconColorHex by viewModel.chatIconColorHex.collectAsStateWithLifecycle()
+    val isChatIconHidden by viewModel.isChatIconHidden.collectAsStateWithLifecycle()
+    val isChatIconDeleted by viewModel.isChatIconDeleted.collectAsStateWithLifecycle()
+
+    val assistantIconSize by viewModel.assistantIconSize.collectAsStateWithLifecycle()
+    val assistantIconColorHex by viewModel.assistantIconColorHex.collectAsStateWithLifecycle()
+    val isAssistantIconHidden by viewModel.isAssistantIconHidden.collectAsStateWithLifecycle()
+
+    val themePrimaryColorHex by viewModel.themePrimaryColorHex.collectAsStateWithLifecycle()
+    val themeSecondaryColorHex by viewModel.themeSecondaryColorHex.collectAsStateWithLifecycle()
+    val themeFontName by viewModel.themeFontName.collectAsStateWithLifecycle()
+
+    val radiusSearchRange by viewModel.radiusSearchRange.collectAsStateWithLifecycle()
+    val retentionDays by viewModel.retentionDays.collectAsStateWithLifecycle()
+
+    var newConditionText by remember { mutableStateOf("") }
+    var context = LocalContext.current
+
+    // Sample color list for choose
+    val colorPalettes = listOf(
+        "#CCA43B" to "الذهبي اليمني",
+        "#10B981" to "الزمردي الصحي",
+        "#EF4444" to "المرجاني الدافئ",
+        "#8B5CF6" to "الأرجواني الهادئ",
+        "#06B6D4" to "السيان المائي",
+        "#F59E0B" to "الكهرمان البرتقالي"
+    )
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text(
+                "التحكم المركزي، هوية التطبيق والنسخ السحابي 🛠️",
+                color = YemenGold,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+        }
+
+        // Active Tasks Loading Banner
+        if (taskProgress != null) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = YemenGold.copy(alpha = 0.15f)),
+                    border = BorderStroke(1.dp, YemenGold)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(color = YemenGold, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(taskProgress, color = OffWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    }
+                }
+            }
+        }
+
+        // Section A: Floating Chat Icon customization
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = SlateCard)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("أيقونة الدعم والدردشة العائمة 💬", color = YemenGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("حجم الأيقونة (بيكسل): $chatIconSize بكسل", color = OffWhite, fontSize = 11.sp)
+                    Slider(
+                        value = chatIconSize.toFloat(),
+                        onValueChange = { viewModel.updateChatIconSpecs(it.toInt(), chatIconColorHex, isChatIconHidden, isChatIconDeleted) },
+                        valueRange = 36f..96f,
+                        colors = SliderDefaults.colors(thumbColor = YemenGold, activeTrackColor = YemenGold)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("اختر لون أيقونة الدردشة:", color = OffWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Color Palettes Row Choice
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        colorPalettes.forEach { item ->
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 4.dp)
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(android.graphics.Color.parseColor(item.first)))
+                                    .border(
+                                        width = if (chatIconColorHex == item.first) 2.dp else 0.dp,
+                                        color = Color.White,
+                                        shape = CircleShape
+                                    )
+                                    .clickable {
+                                        viewModel.updateChatIconSpecs(
+                                            chatIconSize,
+                                            item.first,
+                                            isChatIconHidden,
+                                            isChatIconDeleted
+                                        )
+                                    }
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = SlateBg, modifier = Modifier.padding(vertical = 12.dp))
+
+                    // Toggles
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Switch(
+                            checked = isChatIconHidden,
+                            onCheckedChange = { viewModel.updateChatIconSpecs(chatIconSize, chatIconColorHex, it, isChatIconDeleted) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = YemenGold)
+                        )
+                        Text("إخفاء الأيقونة العائمة مؤقتاً", color = OffWhite, fontSize = 12.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Switch(
+                            checked = isChatIconDeleted,
+                            onCheckedChange = { viewModel.updateChatIconSpecs(chatIconSize, chatIconColorHex, isChatIconHidden, it) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = YemenGold)
+                        )
+                        Text("حذف (إيقاف) ميزة الدردشة بالكامل", color = OffWhite, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        // Section B: Simulated Smart Assistant Floating customize
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = SlateCard)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("أيقونة المساعد الذكي AI 🤖", color = YemenGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("حجم أيقونة المساعد: $assistantIconSize بكسل", color = OffWhite, fontSize = 11.sp)
+                    Slider(
+                        value = assistantIconSize.toFloat(),
+                        onValueChange = { viewModel.updateAssistantIconSpecs(it.toInt(), assistantIconColorHex, isAssistantIconHidden) },
+                        valueRange = 36f..96f,
+                        colors = SliderDefaults.colors(thumbColor = SoftEmerald, activeTrackColor = SoftEmerald)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("رؤية وتألق المساعد الذكي بالرئيسية:", color = OffWhite, fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Switch(
+                            checked = isAssistantIconHidden,
+                            onCheckedChange = { viewModel.updateAssistantIconSpecs(assistantIconSize, assistantIconColorHex, it) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = SoftEmerald)
+                        )
+                        Text("إخفاء مساعد الذكاء الاصطناعي", color = OffWhite, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        // Section C: General Identity Theme colors and fonts
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = SlateCard)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("تخصيص الهوية الضوئية وخطوط العرض 🎨", color = YemenGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("الألوان والخطوط يتم مزامنتها فورياً عبر Snapshot Listeners لتعديل المظهر بجميع أجهزة المستخدمين.", color = MutedSlate, fontSize = 10.sp, textAlign = TextAlign.Right)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text("أختر اللون الرئيسي للهوية (أعلى التطبيق والعناصر):", color = OffWhite, fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        colorPalettes.forEach { cp ->
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 4.dp)
+                                    .size(24.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(android.graphics.Color.parseColor(cp.first)))
+                                    .border(
+                                        width = if (themePrimaryColorHex == cp.first) 2.dp else 0.dp,
+                                        color = Color.White,
+                                        shape = RoundedCornerShape(4.dp)
+                                    )
+                                    .clickable {
+                                        viewModel.updateAppThemeSettings(cp.first, themeSecondaryColorHex, themeFontName)
+                                    }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("اختر خط التصفير والعرض:", color = OffWhite, fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    val fontOptions = listOf("Cairo" to "خط القاهرة الحديث", "Amiri" to "الخط الأميري التقليدي", "Tajawal" to "خط تجوال الأنيق")
+                    fontOptions.forEach { fo ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .minimumInteractiveComponentSize()
+                                .clickable { viewModel.updateAppThemeSettings(themePrimaryColorHex, themeSecondaryColorHex, fo.first) },
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(fo.second, color = if (themeFontName == fo.first) YemenGold else OffWhite, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            RadioButton(
+                                selected = themeFontName == fo.first,
+                                onClick = { viewModel.updateAppThemeSettings(themePrimaryColorHex, themeSecondaryColorHex, fo.first) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section D: Registration Terms / Conditions Management
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = SlateCard)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("شروط وبنود تسجيل مقدمي الخدمات 📋", color = YemenGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text("حدد الشروط الإلزامية التي تظهر للفنيين عند تعبئة طلب التسجيل لتصفية المدخلات والتحقق من الجدية.", color = MutedSlate, fontSize = 10.sp, textAlign = TextAlign.Right)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Existing condition terms
+                    registrationConditions.forEach { condition ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { viewModel.deleteCondition(condition.id) }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = DeepCoral, modifier = Modifier.size(16.dp))
+                            }
+                            Text(
+                                text = "${condition.text} ${if (condition.isRequired) "(إلزامي ⚠️)" else "(اختياري)"}",
+                                color = OffWhite,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Right,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = SlateBg, modifier = Modifier.padding(vertical = 10.dp))
+
+                    // Add new condition form
+                    OutlinedTextField(
+                        value = newConditionText,
+                        onValueChange = { newConditionText = it },
+                        label = { Text("صياغة شرط تسجيل جديد") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = YemenGold)
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = {
+                            if (newConditionText.isNotEmpty()) {
+                                viewModel.addCondition(newConditionText, true)
+                                newConditionText = ""
+                                Toast.makeText(context, "تم حفظ البند وإضافته للقائمة بنجاح!", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = YemenGold),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("إضافة شرط ملزم جديد ➕", color = SlateBg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Section E: Sound and Radius scope
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = SlateCard)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("نطاق البحث ومحادثة الزوار 📍", color = YemenGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("نطاق فلترة الخريطة الحالي لجميع الفنيين: $radiusSearchRange كم", color = OffWhite, fontSize = 11.sp)
+                    Slider(
+                        value = radiusSearchRange.toFloat(),
+                        onValueChange = { viewModel.setRadiusSearchRange(it.toInt()) },
+                        valueRange = 5f..50f,
+                        colors = SliderDefaults.colors(thumbColor = YemenGold)
+                    )
+
+                    HorizontalDivider(color = SlateBg, modifier = Modifier.padding(vertical = 12.dp))
+
+                    Text("إمبراطورية ورسالة عجز الدردشة الموقوفة:", color = OffWhite, fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    var txtMsg by remember { mutableStateOf(viewModel.chatDisabledMessage.value) }
+                    OutlinedTextField(
+                        value = txtMsg,
+                        onValueChange = { 
+                            txtMsg = it
+                            viewModel.updateChatDisabledMessage(it)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp, color = OffWhite)
+                    )
+                }
+            }
+        }
+
+        // Section F: Retention clean and Backup database
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = SlateCard),
+                border = BorderStroke(1.dp, DeepCoral.copy(alpha = 0.3f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("تنظيف وتطهير البيانات والنسخ الاحتياطي ⚙️", color = DeepCoral, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text("فترة بقاء سجل الإشعارات والنظام: $retentionDays يوم", color = OffWhite, fontSize = 11.sp)
+                    Slider(
+                        value = retentionDays.toFloat(),
+                        onValueChange = { viewModel.setRetentionPeriod(it.toInt()) },
+                        valueRange = 7f..90f,
+                        colors = SliderDefaults.colors(thumbColor = DeepCoral)
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = { viewModel.performCleanupTask() },
+                        colors = ButtonDefaults.buttonColors(containerColor = DeepCoral.copy(alpha = 0.2f)),
+                        modifier = Modifier.fillMaxWidth(),
+                        border = BorderStroke(1.dp, DeepCoral)
+                    ) {
+                        Text("تشغيل التنظيف التلقائي للأرشيف واللوغات 🧹", color = DeepCoral, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text("النسخ الاحتياطي اليدوي لقاعدة البيانات والملفات:", color = OffWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { viewModel.performDatabaseManualBackup(context, "Google Drive") },
+                            colors = ButtonDefaults.buttonColors(containerColor = SlateBg),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.CloudUpload, contentDescription = null, tint = SoftEmerald, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("جوجل درايف", color = OffWhite, fontSize = 10.sp)
+                            }
+                        }
+
+                        Button(
+                            onClick = { viewModel.performDatabaseManualBackup(context, "الذاكرة المحلية للهاتف") },
+                            colors = ButtonDefaults.buttonColors(containerColor = SlateBg),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Storage, contentDescription = null, tint = YemenGold, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("ذاكرة الهاتف", color = OffWhite, fontSize = 10.sp)
                             }
                         }
                     }
