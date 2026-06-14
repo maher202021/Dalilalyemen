@@ -31,7 +31,9 @@ import com.example.ui.theme.*
 @Composable
 fun ProviderRegistrationScreen(
     viewModel: YemenGuideViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateHome: () -> Unit,
+    onNavigateToAdmin: () -> Unit
 ) {
     val context = LocalContext.current
     
@@ -68,24 +70,12 @@ fun ProviderRegistrationScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "تسجيل مقدم خدمة جديد",
-                        fontWeight = FontWeight.Bold,
-                        color = YemenGold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = YemenGold
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SlateBg)
+            com.example.ui.components.YemenGuideTopAppBar(
+                viewModel = viewModel,
+                currentScreenRoute = "register",
+                onNavigateHome = onNavigateHome,
+                onNavigateToRegister = { /* already on register */ },
+                onNavigateToAdmin = onNavigateToAdmin
             )
         }
     ) { innerPadding ->

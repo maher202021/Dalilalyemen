@@ -33,7 +33,10 @@ import com.example.ui.theme.*
 @Composable
 fun SmartAssistantScreen(
     viewModel: YemenGuideViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateHome: () -> Unit,
+    onNavigateToRegister: () -> Unit,
+    onNavigateToAdmin: () -> Unit
 ) {
     var textMessage by remember { mutableStateOf("") }
     val chatTimeline by viewModel.assistantChat.collectAsStateWithLifecycle()
@@ -52,51 +55,12 @@ fun SmartAssistantScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.AutoAwesome,
-                            contentDescription = "AI Glow Icon",
-                            tint = YemenGold,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                "المساعد اليميني الذكي",
-                                fontWeight = FontWeight.Bold,
-                                color = YemenGold,
-                                fontSize = 16.sp
-                            )
-                            Text(
-                                "مدعوم بنظام Gemini AI الذكي",
-                                color = MutedSlate,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = YemenGold
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.clearAssistantChat() }) {
-                        Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = "قالب محادثة جديد",
-                            tint = YemenGold
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SlateCard)
+            com.example.ui.components.YemenGuideTopAppBar(
+                viewModel = viewModel,
+                currentScreenRoute = "assistant",
+                onNavigateHome = onNavigateHome,
+                onNavigateToRegister = onNavigateToRegister,
+                onNavigateToAdmin = onNavigateToAdmin
             )
         }
     ) { innerPadding ->

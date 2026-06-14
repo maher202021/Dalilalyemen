@@ -399,86 +399,13 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(SlateBg, SlateBg.copy(alpha = 0.95f))
-                        )
-                    )
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Left action: Role selector
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SlateCard)
-                            .clickable {
-                                if (currentUser == UserSession.Guest) {
-                                    viewModel.selectUserSession(UserSession.Admin)
-                                    Toast.makeText(context, "تم تبديل الحساب لعرض لوحة تحكم الأدمن", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    viewModel.selectUserSession(UserSession.Guest)
-                                    Toast.makeText(context, "تم تبديل الحساب إلى: تصفح كضيف", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (currentUser != UserSession.Guest) Icons.Filled.AdminPanelSettings else Icons.Filled.Person,
-                                contentDescription = "Role Selector",
-                                tint = if (currentUser != UserSession.Guest) YemenGold else MutedSlate,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = when (currentUser) {
-                                    is UserSession.Owner -> "المالك (WAM2026)"
-                                    is UserSession.Admin -> "مشرف"
-                                    else -> "تصفح كضيف"
-                                },
-                                color = if (currentUser != UserSession.Guest) YemenGold else OffWhite,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    // Centered App name & clickable logo
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clickable(interactionSource = null, indication = null) {
-                                homeClickCount++
-                                if (homeClickCount >= 5) {
-                                    showSecretDialog = true
-                                }
-                            }
-                    ) {
-                        Text(
-                            text = "الدليل اليمني",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = YemenGold
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.Filled.Home,
-                            contentDescription = "Logo Backdoor",
-                            tint = try { Color(android.graphics.Color.parseColor(themePrimaryColorHex)) } catch(e: Exception) { YemenGold },
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-            }
+            com.example.ui.components.YemenGuideTopAppBar(
+                viewModel = viewModel,
+                currentScreenRoute = "home",
+                onNavigateHome = { /* Do nothing - already on home */ },
+                onNavigateToRegister = onNavigateToRegister,
+                onNavigateToAdmin = onNavigateToAdmin
+            )
         },
         floatingActionButton = {
             val parsedChatIconColor = remember(chatIconColorHex) { try { Color(android.graphics.Color.parseColor(chatIconColorHex)) } catch(e: Exception) { YemenGold } }
@@ -567,38 +494,7 @@ fun HomeScreen(
                 }
             }
         },
-        bottomBar = {
-            // Static Footer
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.navigationBars),
-                colors = CardDefaults.cardColors(containerColor = SlateCard),
-                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "الدليل اليمني للتطبيقات والخدمات العامة • شركة MAW 777644670",
-                        color = MutedSlate,
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "محمي بالكامل بموجب قوانين الفنيين والتوثيق ٢٠٢٦ ©",
-                        color = YemenGold.copy(alpha = 0.7f),
-                        fontSize = 9.sp,
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
+
     ) { innerPadding ->
         Column(
             modifier = Modifier

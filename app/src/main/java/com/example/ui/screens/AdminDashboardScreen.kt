@@ -35,7 +35,9 @@ import com.example.ui.theme.*
 @Composable
 fun AdminDashboardScreen(
     viewModel: YemenGuideViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateHome: () -> Unit,
+    onNavigateToRegister: () -> Unit
 ) {
     val context = LocalContext.current
     var currentSubTab by remember { mutableStateOf(0) }
@@ -60,25 +62,12 @@ fun AdminDashboardScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "العاصمة الإدارية للأدمن - WAM2026 👑",
-                        fontWeight = FontWeight.Bold,
-                        color = YemenGold,
-                        fontSize = 17.sp
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = YemenGold
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SlateCard)
+            com.example.ui.components.YemenGuideTopAppBar(
+                viewModel = viewModel,
+                currentScreenRoute = "admin",
+                onNavigateHome = onNavigateHome,
+                onNavigateToRegister = onNavigateToRegister,
+                onNavigateToAdmin = { /* already on admin */ }
             )
         },
         bottomBar = {
@@ -1568,6 +1557,161 @@ fun AdminAppIdentityTab(
                                 Text("ذاكرة الهاتف", color = OffWhite, fontSize = 10.sp)
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Section G: Customizing the Top App Bar
+        item {
+            val topBarIcons by viewModel.topAppBarIcons.collectAsStateWithLifecycle()
+            var newIconId by remember { mutableStateOf("") }
+            var newIconNameAr by remember { mutableStateOf("") }
+            var newIconNameEn by remember { mutableStateOf("") }
+            var newIconSymbol by remember { mutableStateOf("") }
+
+            Card(
+                modifier = Modifier.fillMaxWidth().testTag("admin_topbar_customizer_card"),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = SlateCard)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("إعدادات وتخصيص شريط الأيقونات العلوي 🌐", color = YemenGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("يمكنك إعادة ترتيب، حذف، إخفاء/إظهار أيقونات الشريط العلوي أو إضافة مفاتيح اختصار جديدة تماماً:", color = MutedSlate, fontSize = 10.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    topBarIcons.forEachIndexed { index, icon ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .background(SlateBg.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Order Buttons (Up/Down) & Delete
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = { viewModel.moveTopAppBarIconUp(icon.id) },
+                                    enabled = index > 0,
+                                    modifier = Modifier.size(24.dp).testTag("move_up_${icon.id}")
+                                ) {
+                                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Up", tint = if (index > 0) YemenGold else MutedSlate, modifier = Modifier.size(16.dp))
+                                }
+                                IconButton(
+                                    onClick = { viewModel.moveTopAppBarIconDown(icon.id) },
+                                    enabled = index < topBarIcons.size - 1,
+                                    modifier = Modifier.size(24.dp).testTag("move_down_${icon.id}")
+                                ) {
+                                    Icon(Icons.Filled.ArrowDownward, contentDescription = "Down", tint = if (index < topBarIcons.size - 1) YemenGold else MutedSlate, modifier = Modifier.size(16.dp))
+                                }
+                                if (icon.id != "home" && icon.id != "login" && icon.id != "register" && icon.id != "language" && icon.id != "refresh") {
+                                    IconButton(
+                                        onClick = { viewModel.deleteTopAppBarIcon(icon.id) },
+                                        modifier = Modifier.size(24.dp).testTag("delete_${icon.id}")
+                                    ) {
+                                        Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = DeepCoral, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+
+                            // Info name & status switch
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(icon.defaultIcon, fontSize = 16.sp, modifier = Modifier.padding(end = 4.dp))
+                                        Text(icon.nameAr, color = OffWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Text("ID: ${icon.id} | Order: ${icon.order}", color = MutedSlate, fontSize = 9.sp)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Switch(
+                                    checked = icon.isVisible,
+                                    onCheckedChange = { viewModel.toggleTopAppBarIconVisibility(icon.id) },
+                                    colors = SwitchDefaults.colors(checkedThumbColor = YemenGold),
+                                    modifier = Modifier.testTag("toggle_visible_${icon.id}")
+                                )
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = SlateBg, modifier = Modifier.padding(vertical = 12.dp))
+
+                    Text("إضافة أيقونة اختصار جديدة للشريط العلوي ➕", color = YemenGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = newIconId,
+                            onValueChange = { newIconId = it },
+                            label = { Text("معرّف الأيقونة", fontSize = 9.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f).testTag("new_icon_id_input"),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = YemenGold, unfocusedBorderColor = SlateBg, focusedTextColor = OffWhite, unfocusedTextColor = OffWhite)
+                        )
+                        OutlinedTextField(
+                            value = newIconSymbol,
+                            onValueChange = { newIconSymbol = it },
+                            label = { Text("الرمز/الإيموجي", fontSize = 9.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f).testTag("new_icon_emoji_input"),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = YemenGold, unfocusedBorderColor = SlateBg, focusedTextColor = OffWhite, unfocusedTextColor = OffWhite)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = newIconNameAr,
+                            onValueChange = { newIconNameAr = it },
+                            label = { Text("الاسم بالعربية", fontSize = 9.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f).testTag("new_icon_name_ar_input"),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = YemenGold, unfocusedBorderColor = SlateBg, focusedTextColor = OffWhite, unfocusedTextColor = OffWhite)
+                        )
+                        OutlinedTextField(
+                            value = newIconNameEn,
+                            onValueChange = { newIconNameEn = it },
+                            label = { Text("الاسم بالإنجليزية", fontSize = 9.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f).testTag("new_icon_name_en_input"),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = YemenGold, unfocusedBorderColor = SlateBg, focusedTextColor = OffWhite, unfocusedTextColor = OffWhite)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = {
+                            if (newIconId.isNotBlank() && newIconSymbol.isNotBlank() && newIconNameAr.isNotBlank()) {
+                                viewModel.addTopAppBarIcon(newIconId, newIconNameAr, newIconNameEn, newIconSymbol, true)
+                                Toast.makeText(context, "تمت إضافة الأيقونة بنجاح للشريط العلوي!", Toast.LENGTH_SHORT).show()
+                                newIconId = ""
+                                newIconNameAr = ""
+                                newIconNameEn = ""
+                                newIconSymbol = ""
+                            } else {
+                                Toast.makeText(context, "يرجى تعبئة كافة الحقول المطلوبة للإضافة!", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = YemenGold),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("add_custom_icon_btn")
+                    ) {
+                        Text("حفظ وإضافة للشريط العلوي 🛡️", color = SlateBg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

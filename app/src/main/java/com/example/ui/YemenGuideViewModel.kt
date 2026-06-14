@@ -106,6 +106,14 @@ class YemenGuideViewModel(application: Application) : AndroidViewModel(applicati
     private val _retentionDays = MutableStateFlow(30)
     val retentionDays: StateFlow<Int> = _retentionDays.asStateFlow()
 
+    // App language State ("ar" or "en")
+    private val _currentLanguage = MutableStateFlow("ar")
+    val currentLanguage: StateFlow<String> = _currentLanguage.asStateFlow()
+
+    // Dynamic Top App Bar Configuration
+    private val _topAppBarIcons = MutableStateFlow<List<TopAppBarIconConfig>>(emptyList())
+    val topAppBarIcons: StateFlow<List<TopAppBarIconConfig>> = _topAppBarIcons.asStateFlow()
+
     // --- Streams ---
     val banners: StateFlow<List<AdBanner>> = repository.banners
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -222,6 +230,36 @@ class YemenGuideViewModel(application: Application) : AndroidViewModel(applicati
 
                 _radiusSearchRange.value = doc.getLong("radiusSearchRange")?.toInt() ?: 10
                 _retentionDays.value = doc.getLong("retentionDays")?.toInt() ?: 30
+
+                val iconsList = doc.getData()?.get("topAppBarIcons") as? List<Map<String, Any>>
+                if (iconsList != null) {
+                    _topAppBarIcons.value = iconsList.map { map ->
+                        TopAppBarIconConfig(
+                            id = map["id"] as? String ?: "",
+                            nameAr = map["nameAr"] as? String ?: "",
+                            nameEn = map["nameEn"] as? String ?: "",
+                            defaultIcon = map["defaultIcon"] as? String ?: "🏠",
+                            isVisible = map["isVisible"] as? Boolean ?: true,
+                            order = (map["order"] as? Long)?.toInt() ?: 0
+                        )
+                    }.sortedBy { it.order }
+                } else {
+                    _topAppBarIcons.value = listOf(
+                        TopAppBarIconConfig("home", "الرئيسية", "Home", "🏠", true, 0),
+                        TopAppBarIconConfig("login", "تسجيل الدخول", "Login", "🔐", true, 1),
+                        TopAppBarIconConfig("register", "إنشاء حساب مقدم خدمة", "Register Provider", "👤", true, 2),
+                        TopAppBarIconConfig("language", "تبديل اللغة", "Switch Language", "🌐", true, 3),
+                        TopAppBarIconConfig("refresh", "تحديث الصفحة والبيانات", "Refresh Screen & Data", "🔄", true, 4)
+                    )
+                }
+            } else {
+                _topAppBarIcons.value = listOf(
+                    TopAppBarIconConfig("home", "الرئيسية", "Home", "🏠", true, 0),
+                    TopAppBarIconConfig("login", "تسجيل الدخول", "Login", "🔐", true, 1),
+                    TopAppBarIconConfig("register", "إنشاء حساب مقدم خدمة", "Register Provider", "👤", true, 2),
+                    TopAppBarIconConfig("language", "تبديل اللغة", "Switch Language", "🌐", true, 3),
+                    TopAppBarIconConfig("refresh", "تحديث الصفحة والبيانات", "Refresh Screen & Data", "🔄", true, 4)
+                )
             }
         }
     }
@@ -243,9 +281,74 @@ class YemenGuideViewModel(application: Application) : AndroidViewModel(applicati
             "themeSecondaryColorHex" to _themeSecondaryColorHex.value,
             "themeFontName" to _themeFontName.value,
             "radiusSearchRange" to _radiusSearchRange.value,
-            "retentionDays" to _retentionDays.value
+            "retentionDays" to _retentionDays.value,
+            "topAppBarIcons" to _topAppBarIcons.value.map { icon ->
+                mapOf(
+                    "id" to icon.id,
+                    "nameAr" to icon.nameAr,
+                    "nameEn" to icon.nameEn,
+                    "defaultIcon" to icon.defaultIcon,
+                    "isVisible" to icon.isVisible,
+                    "order" to icon.order
+                )
+            }
         )
         firestore.collection("settings").document("identity").set(data)
+    }
+
+    fun toggleLanguage() {
+        _currentLanguage.value = if (_currentLanguage.value == "ar") "en" else "ar"
+    }
+
+    fun updateTopAppBarIcons(icons: List<TopAppBarIconConfig>) {
+        _topAppBarIcons.value = icons.sortedBy { it.order }
+        saveIdentitySettingsToFirestore()
+    }
+
+    fun toggleTopAppBarIconVisibility(id: String) {
+        val updated = _topAppBarIcons.value.map { icon ->
+            if (icon.id == id) icon.copy(isVisible = !icon.isVisible) else icon
+        }
+        updateTopAppBarIcons(updated)
+    }
+
+    fun moveTopAppBarIconUp(id: String) {
+        val list = _topAppBarIcons.value.toMutableList()
+        val index = list.indexOfFirst { it.id == id }
+        if (index > 0) {
+            val current = list[index]
+            val prev = list[index - 1]
+            list[index] = prev.copy(order = current.order)
+            list[index - 1] = current.copy(order = prev.order)
+            updateTopAppBarIcons(list)
+        }
+    }
+
+    fun moveTopAppBarIconDown(id: String) {
+        val list = _topAppBarIcons.value.toMutableList()
+        val index = list.indexOfFirst { it.id == id }
+        if (index >= 0 && index < list.size - 1) {
+            val current = list[index]
+            val next = list[index + 1]
+            list[index] = next.copy(order = current.order)
+            list[index + 1] = current.copy(order = next.order)
+            updateTopAppBarIcons(list)
+        }
+    }
+
+    fun addTopAppBarIcon(id: String, nameAr: String, nameEn: String, icon: String, visible: Boolean) {
+        val currentList = _topAppBarIcons.value
+        val nextOrder = (currentList.maxOfOrNull { it.order } ?: -1) + 1
+        val newIcon = TopAppBarIconConfig(id, nameAr, nameEn, icon, visible, nextOrder)
+        val updated = currentList + newIcon
+        updateTopAppBarIcons(updated)
+    }
+
+    fun deleteTopAppBarIcon(id: String) {
+        val updated = _topAppBarIcons.value.filter { it.id != id }.mapIndexed { idx, icon ->
+            icon.copy(order = idx)
+        }
+        updateTopAppBarIcons(updated)
     }
 
     // --- UPDATE SYSTEM SPECIFICATIONS CONTROLS ---
@@ -730,4 +833,13 @@ data class AssistantMessage(
     val text: String,
     val isSentByMe: Boolean,
     val timestamp: Long = System.currentTimeMillis()
+)
+
+data class TopAppBarIconConfig(
+    val id: String,
+    val nameAr: String,
+    val nameEn: String,
+    val defaultIcon: String,
+    val isVisible: Boolean = true,
+    val order: Int
 )

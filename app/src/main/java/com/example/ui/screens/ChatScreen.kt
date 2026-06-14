@@ -35,7 +35,10 @@ fun ChatScreen(
     viewModel: YemenGuideViewModel,
     providerId: Int,
     providerName: String,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateHome: () -> Unit,
+    onNavigateToRegister: () -> Unit,
+    onNavigateToAdmin: () -> Unit
 ) {
     val context = LocalContext.current
     var textMessage by remember { mutableStateOf("") }
@@ -88,50 +91,21 @@ fun ChatScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text(
-                            text = providerName,
-                            fontWeight = FontWeight.Bold,
-                            color = YemenGold,
-                            fontSize = 17.sp
-                        )
-                        Text(
-                            text = statusText,
-                            color = statusColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
+            com.example.ui.components.YemenGuideTopAppBar(
+                viewModel = viewModel,
+                currentScreenRoute = "chat",
+                onNavigateHome = {
+                    viewModel.setActiveChatProvider(null)
+                    onNavigateHome()
                 },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        viewModel.setActiveChatProvider(null)
-                        onNavigateBack()
-                    }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = YemenGold
-                        )
-                    }
+                onNavigateToRegister = {
+                    viewModel.setActiveChatProvider(null)
+                    onNavigateToRegister()
                 },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:777644670"))
-                            context.startActivity(intent)
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Phone,
-                            contentDescription = "Contact Phone",
-                            tint = YemenGold
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SlateCard)
+                onNavigateToAdmin = {
+                    viewModel.setActiveChatProvider(null)
+                    onNavigateToAdmin()
+                }
             )
         }
     ) { innerPadding ->

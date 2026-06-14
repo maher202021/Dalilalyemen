@@ -87,7 +87,15 @@ class MainActivity : ComponentActivity() {
             composable("register") {
               ProviderRegistrationScreen(
                 viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateHome = {
+                  navController.navigate("home") {
+                    popUpTo("home") { inclusive = true }
+                  }
+                },
+                onNavigateToAdmin = {
+                  navController.navigate("admin")
+                }
               )
             }
 
@@ -105,7 +113,18 @@ class MainActivity : ComponentActivity() {
                 viewModel = viewModel,
                 providerId = id,
                 providerName = name,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateHome = {
+                  navController.navigate("home") {
+                    popUpTo("home") { inclusive = true }
+                  }
+                },
+                onNavigateToRegister = {
+                  navController.navigate("register")
+                },
+                onNavigateToAdmin = {
+                  navController.navigate("admin")
+                }
               )
             }
 
@@ -113,7 +132,18 @@ class MainActivity : ComponentActivity() {
             composable("assistant") {
               SmartAssistantScreen(
                 viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateHome = {
+                  navController.navigate("home") {
+                    popUpTo("home") { inclusive = true }
+                  }
+                },
+                onNavigateToRegister = {
+                  navController.navigate("register")
+                },
+                onNavigateToAdmin = {
+                  navController.navigate("admin")
+                }
               )
             }
 
@@ -121,7 +151,15 @@ class MainActivity : ComponentActivity() {
             composable("admin") {
               AdminDashboardScreen(
                 viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateHome = {
+                  navController.navigate("home") {
+                    popUpTo("home") { inclusive = true }
+                  }
+                },
+                onNavigateToRegister = {
+                  navController.navigate("register")
+                }
               )
             }
           }
